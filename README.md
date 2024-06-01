@@ -1,16 +1,49 @@
 # GSSTDA: Gene Structure Survival using Topological Data Analysis
 ## Installation
+You can install the released version of eat from [CRAN](https://CRAN.R-project.org) with:
 
-You can install the development version from
+``` r
+install.packages("GSSTDA")
+```
+
+And you can install the development version from
 [GitHub](https://github.com/MiriamEsteve/EAT) with:
 
 ``` r
 library(devtools)
 devtools::install_github("jokergoo/ComplexHeatmap")
 
-devtools::install_github("MiriamEsteve/G-SS-TDA")
+devtools::install_github("MiriamEsteve/GSSTDA")
 library(GSSTDA)
 ```
+
+### Installing the "ComplexHeatmap" Dependency from Bioconductor
+The "ComplexHeatmap" package is a Bioconductor package required for some functionalities of our R package. To ensure it is correctly installed, please follow these steps:
+
+*1. Install Bioconductor Manager*: First, ensure that the Bioconductor manager package is installed. You can do this by running the following command in your R console:
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+```
+
+*2. Install ComplexHeatmap*: Once you have the Bioconductor manager installed, you can install the "ComplexHeatmap" package by executing:
+```{r}
+BiocManager::install("ComplexHeatmap")
+```
+
+*3. Load the package*: After installation, load "ComplexHeatmap" into your R session to verify that the installation was successful:
+```{r}
+library(ComplexHeatmap)
+```
+
+*4. Check for updates*: Bioconductor packages are updated regularly. It's a good practice to check for updates to ensure you have the latest version of "ComplexHeatmap". You can check for updates and install them by running:
+```{r}
+BiocManager::install()  # This updates all installed Bioconductor packages
+```
+
+By following these instructions, you should have the "ComplexHeatmap" package installed and ready for use with our package. If you encounter any issues during installation, please consult the Bioconductor support site or reach out for help through the community forums
+
 
 ## Loading data
 * The *full data* is the expression matrix, 
@@ -44,9 +77,9 @@ For hierarchical clustering only, you will be asked by the console to choose the
 
 ```{r}
 #Mapper information
-num_intervals <- 5
+num_intervals <- 10
 percent_overlap <- 40
-distance_type <- "cor"
+distance_type <- "correlation"
 clustering_type <- "hierarchical"
 linkage_type <- "single" # only necessary if the type of clustering is hierarchical 
 # num_bins_when_clustering <- 10 # only necessary if the type of clustering is hierarchical 
@@ -60,26 +93,26 @@ The package allows the various steps required for GSSTDA to be performed separat
 
 ### OPTION #1 (the three blocks of the G-SS-TDA process are in separate function):
 
-#### First step of the process: DGSA.
+#### First step of the process: dsga.
 
 This analysis, developed by Nicolau *et al.* is independent of the rest of the process and can be used with the data for further analysis other than mapper. It allows the calculation of the "disease component" which consists of, through linear models, eliminating the part of the data that is considered normal or healthy and keeping only the component that is due to the disease.  
 
 ```{r}
-DGSA_object <- DGSA(full_data, survival_time, survival_event, case_tag)
+dsga_object <- dsga(full_data, survival_time, survival_event, case_tag)
 
 
 ```
 
-#### Second step of the process: Select the genes within the DGSA object created in the previous step and calcute the values of the filtering functions.
+#### Second step of the process: Select the genes within the dsga object created in the previous step and calcute the values of the filtering functions.
 
 After performing a survival analysis of each gene, this function selects the genes to be used in the mapper according to both their variability within the database and their relationship with survival. Subsequently, with the genes selected, the values of the filtering functions are calculated for each patient. The filter function allows to summarise each vector of each individual in a single data. This function takes into account the survival associated with each gene.
 
 ```{r}
-geneSelection_object <- geneSelection(DGSA_object, gen_select_type, percent_gen_select)
+gene_selection_object <- gene_selection(dsga_object, gen_select_type, percent_gen_select)
 
 ```
 
-Another option to execute the second step of the process. Create a object "data_object" with the require information. This could be used when you do not want to apply DGSA (RBR, duda).
+Another option to execute the second step of the process. Create a object "data_object" with the require information. This could be used when you do not want to apply dsga.
 
 ```{r}
 # Create data object
@@ -89,7 +122,7 @@ class(data_object) <- "data_object"
 
 
 #Select gene from data object
-geneSelection_object <- geneSelection(data_object, gen_select_type, percent_gen_select)
+gene_selection_object <- gene_selection(data_object, gen_select_type, percent_gen_select)
 
 
 ```
@@ -99,11 +132,11 @@ geneSelection_object <- geneSelection(data_object, gen_select_type, percent_gen_
 
 Mapper condenses the information of high-dimensional datasets into a combinatory graph that is referred to as the skeleton of the dataset. To do so, it divides the dataset into different levels according to its value of the filtering function. These levels overlap each other. Within each level, an independent clustering is performed using the input matrix and the indicated distance type. Subsequently, clusters from different levels that share patients with each other are joined by a vertex.
 
-This function is independent from the rest and could be used without having done DGSA and gene selection
+This function is independent from the rest and could be used without having done dsga and gene selection
 
 ```{r}
-mapper_object <- mapper(full_data = geneSelection_object[["genes_disease_component"]], 
-                        filter_values = geneSelection_object[["filter_values"]],
+mapper_object <- mapper(data = gene_selection_object[["genes_disease_component"]], 
+                        filter_values = gene_selection_object[["filter_values"]],
                         num_intervals = num_intervals,
                         percent_overlap = percent_overlap, distance_type = distance_type,
                         clustering_type = clustering_type,
@@ -114,15 +147,15 @@ mapper_object <- mapper(full_data = geneSelection_object[["genes_disease_compone
 ```
 
 
-Obtain information from the DGSA block created in the previous step.
+Obtain information from the dsga block created in the previous step.
 
 This function returns the 100 genes with the highest variability within 
 the dataset and builds a heat map with them.
 ```{r}
-DGSA_information <- results_DGSA(DGSA_object[["matrix_disease_component"]], case_tag)
-print(DGSA_information)
+dsga_information <- results_dsga(dsga_object[["matrix_disease_component"]], case_tag)
+print(dsga_information)
 ```
-<img src="man/figures/print_DGSA_information.png" width="100%" />
+<img src="man/figures/print_dsga_information.png" width="100%" />
 
 
 Obtain information from the mapper object created in the G-SS-TDA process.
@@ -139,9 +172,9 @@ plot_mapper(mapper_object)
 
 ### OPTION #2 (all process integrate in the same function):
 
-It creates the GSSTDA object with full data set, internally pre-process using the DGSA technique, and the mapper information.
+It creates the GSSTDA object with full data set, internally pre-process using the dsga technique, and the mapper information.
 ```{r}
-GSSTDA_obj <- GSSTDA(full_data = full_data, survival_time = survival_time, 
+gsstda_obj <- gsstda(full_data = full_data, survival_time = survival_time, 
                      survival_event = survival_event, case_tag = case_tag, 
                      gen_select_type = gen_select_type, 
                      percent_gen_select = percent_gen_select, 
@@ -155,23 +188,23 @@ GSSTDA_obj <- GSSTDA(full_data = full_data, survival_time = survival_time,
 
 ```
 
-Obtain information from the DGSA block created in the previous step.
+Obtain information from the dsga block created in the previous step.
 
 This function returns the 100 genes with the highest variability within the dataset and builds a heat map with them.
 ```{r}
-DGSA_information <- results_DGSA(GSSTDA_obj[["matrix_disease_component"]], case_tag)
-print(DGSA_information)
+dsga_information <- results_dsga(gsstda_obj[["matrix_disease_component"]], case_tag)
+print(dsga_information)
 ```
-<img src="man/figures/print_DGSA_information.png" width="100%" />
+<img src="man/figures/print_dsga_information.png" width="100%" />
 
 
 Obtain information from the mapper object created in the G-SS-TDA process.
 ```{r}
-print(GSSTDA_obj[["mapper_obj"]])
+print(gsstda_obj[["mapper_obj"]])
 ```
 
 Plot the mapper graph.
 ```{r}
-plot_mapper(GSSTDA_obj[["mapper_obj"]])
+plot_mapper(gsstda_obj[["mapper_obj"]])
 ```
 <img src="man/figures/plot_mapper_object.png" width="100%" />

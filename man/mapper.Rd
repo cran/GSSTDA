@@ -5,20 +5,21 @@
 \title{Mapper object}
 \usage{
 mapper(
-  full_data,
+  data,
   filter_values,
   num_intervals = 5,
   percent_overlap = 40,
-  distance_type = "cor",
+  distance_type = "correlation",
   clustering_type = "hierarchical",
   num_bins_when_clustering = 10,
   linkage_type = "single",
-  optimal_clustering_mode = "",
+  optimal_clustering_mode = NA,
+  silhouette_threshold = 0.25,
   na.rm = TRUE
 )
 }
 \arguments{
-\item{full_data}{Input matrix whose columns correspond to the individuals
+\item{data}{Input matrix whose columns correspond to the individuals
 and rows to the features.}
 
 \item{filter_values}{Vector obtained after applying the filtering function
@@ -32,7 +33,7 @@ partition based on filtering values. 5 default option.}
 as a percentage. 40 default option.}
 
 \item{distance_type}{Type of distance to be used for clustering.
-Choose between correlation ("cor") and euclidean ("euclidean"). "cor"
+Choose between correlation ("correlation") and euclidean ("euclidean"). "correlation"
 default option.}
 
 \item{clustering_type}{Type of clustering method. Choose between
@@ -41,8 +42,8 @@ default option.}
 
 \item{num_bins_when_clustering}{Number of bins to generate the
 histogram employed by the standard optimal number of cluster finder
-method. Parameter not necessary if the "optimal_clust_mode" option
-is "silhouette" or the "clust_type" is "PAM". 10 default option.}
+method. Parameter not necessary if the "optimal_clustering_mode" option
+is "silhouette" or the "clustering_type" is "PAM". 10 default option.}
 
 \item{linkage_type}{Linkage criteria used in hierarchical clustering.
 Choose between "single" for single-linkage clustering, "complete" for
@@ -55,6 +56,19 @@ clusters. It is only necessary if the chosen type of algorithm is
 hierarchical. In this case, choose between "standard" (the method used
 in the original mapper article) or "silhouette". In the case of the PAM
 algorithm, the method will always be "silhouette".}
+
+\item{silhouette_threshold}{Minimum value of \eqn{\overline{s}}{s-bar} that a set of
+clusters must have to be chosen as optimal. Within each interval of the
+filter function, the average silhouette values \eqn{\overline{s}}{s-bar} are computed
+for all possible partitions from $2$ to $n-1$, where $n$ is the number of
+samples within a specific interval. The $n$ that produces the highest value
+of \eqn{\overline{s}}{s-bar} and that exceeds a specific threshold is selected as the
+optimum number of clusters. If no partition produces an \eqn{\overline{s}}{s-bar}
+exceeding the chosen threshold, all samples are then assigned to a unique
+cluster. The default value is $0.25$. The threshold of $0.25$ for
+\eqn{\overline{s}}{s-bar} has been chosen based on standard practice, recognizing it
+as a moderate value that reflects adequate separation and cohesion within
+clusters.}
 
 \item{na.rm}{\code{logical}. If \code{TRUE}, \code{NA} rows are omitted.
 If \code{FALSE}, an error occurs in case of \code{NA} rows. TRUE default
@@ -82,13 +96,13 @@ dimension, i.e. using only one filter function value.
 \examples{
 \donttest{
 control_tag_cases <- which(case_tag == "NT")
-geneSelection_object <- gene_selection(full_data, survival_time, survival_event, control_tag_cases,
-gen_select_type ="top_bot", num_gen_select = 10)
+gene_selection_object <- gene_selection_(full_data, survival_time, survival_event,
+control_tag_cases, gen_select_type ="top_bot", num_gen_select = 10)
 
-mapper_object <- mapper(full_data = geneSelection_object[["genes_disease_component"]],
-filter_values = geneSelection_object[["filter_values"]],
+mapper_object <- mapper(data = gene_selection_object[["genes_disease_component"]],
+filter_values = gene_selection_object[["filter_values"]],
 num_intervals = 5,
-percent_overlap = 40, distance_type = "cor",
+percent_overlap = 40, distance_type = "correlation",
 clustering_type = "hierarchical",
 linkage_type = "single")}
 }

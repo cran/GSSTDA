@@ -1,6 +1,7 @@
 Package: GSSTDA
-Title: Gene Structure Survival using Topological Data Analysis
-Version: 0.1.3
+Title: Progression Analysis of Disease with Survival using Topological
+        Data Analysis
+Version: 1.0.0
 Authors@R: 
     c(
 	person(given = "Miriam", 
@@ -35,7 +36,6 @@ Description: Mapper-based survival analysis with transcriptomics data is designe
 			and methylation studies" <doi:10.1101/2022.09.08.507080>.
 License: GPL-3
 Encoding: UTF-8
-RoxygenNote: 7.2.3
 LazyData: true
 LazyDataCompression: xz
 DependsNote: BioC (>= 3.2)
@@ -48,8 +48,9 @@ SuggestsNote: BioC (>= 3.0), Recommended: affy, oligoClasses, oligo,
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Depends: R (>= 3.5.0)
+RoxygenNote: 7.2.3
 NeedsCompilation: no
-Packaged: 2023-06-06 12:55:15 UTC; Miriam_Esteve
+Packaged: 2024-06-01 07:44:14 UTC; Miriam
 Author: Miriam Esteve [aut, cre] (<https://orcid.org/0000-0002-5908-0581>),
   Raquel Bosch [aut],
   Jaume Forés [aut] (<https://orcid.org/0000-0002-9025-4877>),
@@ -57,4 +58,4 @@ Author: Miriam Esteve [aut, cre] (<https://orcid.org/0000-0002-5908-0581>),
   Antonio Falco [aut]
 Maintainer: Miriam Esteve <miriam.estevecampello@uchceu.es>
 Repository: CRAN
-Date/Publication: 2023-06-07 13:20:11 UTC
+Date/Publication: 2024-06-01 08:02:47 UTC

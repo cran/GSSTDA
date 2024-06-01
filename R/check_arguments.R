@@ -38,13 +38,15 @@ check_full_data <- function(full_data, na.rm = TRUE){
 #' @description Checking the \code{survival_time}, \code{survival_event} and \code{case_tag} introduces in the \code{GSSTDA} object.
 #'
 #' @param full_data The genes of the full_data (maybe remove by na.rm = TRUE)
-#' @param survival_time Time between disease diagnosis and death (if not dead until the end of follow-up).
-#' @param survival_event \code{logical}. Whether the patient has died or not.
-#' @param case_tag The tag of the healthy patient (healthy or not).
+#' @param survival_time Time between disease diagnosis and event (if there was
+#' no event until the end of follow-up).
+#' @param survival_event \code{logical}. Whether or not the event has occurred.
+#' @param case_tag The tag of the healthy sample (healthy or not).
+#' @param control_tag Tag of the healthy sample.E.g. "T"
 #' @param na.rm \code{logical}. If \code{TRUE}, \code{NA} rows are omitted.
 #' If \code{FALSE}, an error occurs in case of \code{NA} rows.
-#' @return control_tag Return the tag of the healthy patient
-check_vectors <- function(full_data, survival_time, survival_event, case_tag, na.rm = TRUE){
+#' @return control_tag Return the tag of the healthy sample.
+check_vectors <- function(full_data, survival_time, survival_event, case_tag, control_tag, na.rm = TRUE){
   ncol_full_data <- ncol(full_data)
   # Check if the arguments are vectors; a valid type of data; and the vectors are the same dimension as a full_data
   if(!is.vector(survival_time) | !is.numeric(survival_time) | length(survival_time) != ncol_full_data){
@@ -77,7 +79,9 @@ check_vectors <- function(full_data, survival_time, survival_event, case_tag, na
   }
 
   control_tag_opt <- unique(case_tag)
-  control_tag <- readline(prompt=paste("What is the tag of the healthy patient (value in the case_tag)? (", control_tag_opt[1], " or ", control_tag_opt[2], "): " , sep="") )
+  if(is.na(control_tag)){
+    control_tag <- readline(prompt=paste("What is the tag of the healthy patient (value in the case_tag)? (", control_tag_opt[1], " or ", control_tag_opt[2], "): " , sep="") )
+  }
 
   if(!(control_tag %in% control_tag_opt)){
     print(paste("The case tag is '", control_tag_opt[1], "' by default"))
@@ -157,7 +161,7 @@ check_gene_selection <- function(num_genes, gen_select_type, percent_gen_select)
 #' to the input matrix, i.e, a vector with the filtering function
 #' values for each included sample.
 #' @param distance_type Type of distance to be used for clustering.
-#' Choose between correlation ("cor") and euclidean ("euclidean"). "cor"
+#' Choose between correlation ("correlation") and euclidean ("euclidean"). "correlation"
 #' default option.
 #' @param clustering_type Type of clustering method. Choose between
 #' "hierarchical" and "PAM" (“partition around medoids”) options.
@@ -167,13 +171,31 @@ check_gene_selection <- function(num_genes, gen_select_type, percent_gen_select)
 #' complete-linkage clustering or "average" for average linkage clustering
 #' (or UPGMA). Only necessary for hierarchical clustering.
 #' "single" default option.
+#' @param optimal_clustering_mode Method for selection optimal number of
+#' clusters. It is only necessary if the chosen type of algorithm is
+#' hierarchical. In this case, choose between "standard" (the method used
+#' in the original mapper article) or "silhouette". In the case of the PAM
+#' algorithm, the method will always be "silhouette".
+#' @param silhouette_threshold Minimum value of \eqn{\overline{s}}{s-bar} that a set of
+#' clusters must have to be chosen as optimal. Within each interval of the
+#' filter function, the average silhouette values \eqn{\overline{s}}{s-bar} are computed
+#' for all possible partitions from $2$ to $n-1$, where $n$ is the number of
+#' samples within a specific interval. The $n$ that produces the highest value
+#' of \eqn{\overline{s}}{s-bar} and that exceeds a specific threshold is selected as the
+#' optimum number of clusters. If no partition produces an \eqn{\overline{s}}{s-bar}
+#' exceeding the chosen threshold, all samples are then assigned to a unique
+#' cluster. The default value is $0.25$. The threshold of $0.25$ for
+#' \eqn{\overline{s}}{s-bar} has been chosen based on standard practice, recognizing it
+#' as a moderate value that reflects adequate separation and cohesion within
+#' clusters.
 #' @param na.rm \code{logical}. If \code{TRUE}, \code{NA} rows are omitted.
 #' If \code{FALSE}, an error occurs in case of \code{NA} rows.
 #'
 #' @return \code{optimal_clustering_mode}
-check_arg_mapper <- function(full_data, filter_values, distance_type, clustering_type, linkage_type, na.rm = TRUE){
+check_arg_mapper <- function(full_data, filter_values, distance_type, clustering_type, linkage_type,
+                             optimal_clustering_mode = NA, silhouette_threshold = 0.25, na.rm = TRUE){
   #Check distance_type
-  distances <- c("cor","euclidean")
+  distances <- c("correlation","euclidean")
   if(!distance_type %in% distances){
     stop(paste("Invalid distance selected. Choose one of the folowing: ", paste(distances, collapse = ", ")))
   }
@@ -184,18 +206,36 @@ check_arg_mapper <- function(full_data, filter_values, distance_type, clustering
     stop(paste("Invalid clustering method selected. Choose one of the folowing: ", paste(clust_types,collapse = ", ")))
   }
 
-  optimal_clustering_mode <- "silhouette"
+  if(is.na(optimal_clustering_mode)){
+    optimal_clustering_mode <- "silhouette"
 
-  if(clustering_type == "hierarchical"){
-    opt_clust_modes <- c("standard","silhouette")
-    option <- readline(prompt="Choose one of the following optimal cluster number method: standard/silhouette: ")
+    if(clustering_type == "hierarchical"){
+      option <- readline(prompt="Choose one of the following optimal cluster number method: standard/silhouette: ")
 
-    if(option != "standard"){
-      optimal_clustering_mode <- "silhouette"
+      if(option != "standard"){
+        optimal_clustering_mode <- "silhouette"
+      }
+      else{
+        optimal_clustering_mode <- "standard"
+      }
+    }
+  }else{
+    #Check optimal_clustering_mode
+    optimal_clustering <- c("silhouette","standard")
+    if(!optimal_clustering_mode %in% optimal_clustering){
+      stop(paste("Invalid optimal_clustering selected. Choose one of the folowing: ", paste(optimal_clustering, collapse = ", ")))
     }
   }
+  message("The optimal clustering mode is '", optimal_clustering_mode, " '")
 
-  message("The optimal clustering mode is '", optimal_clustering_mode, "' by default")
+
+  # Check
+  if (optimal_clustering_mode == "silhouette"){
+    if(silhouette_threshold != 0.25){
+      if(silhouette_threshold<0 || silhouette_threshold>1)
+        stop(paste("Invalid silhouette_threshold value. Choose one between 0 and 1"))
+    }
+  }
 
   #Check linkage_type
   link_types <- c("single","average","complete")

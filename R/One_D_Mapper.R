@@ -56,10 +56,10 @@ samples_in_levels <- function(interval_data,filter_values){
 #' particular interval of the filter function) with the proposed clustering
 #' algorithm and the proposed method to determine the optimal number
 #' of clusters.
-#' @param full_data_i Matrix with the columns of the input matrix
+#' @param data_i Matrix with the columns of the input matrix
 #' corresponding to the individuals belonging to the level.
 #' @param distance_type Type of distance to be used for clustering.
-#' Choose between correlation ("cor") and euclidean ("euclidean").
+#' Choose between correlation ("correlation") and euclidean ("euclidean").
 #' @param clustering_type Type of clustering method.
 #' Choose between "hierarchical" and "PAM" (“partition around medoids”)
 #' options.
@@ -73,6 +73,18 @@ samples_in_levels <- function(interval_data,filter_values){
 #' hierarchical. In this case, choose between "standard" (the method used
 #' in the original mapper article) or "silhouette". In the case of the PAM
 #' algorithm, the method will always be "silhouette".
+#' @param silhouette_threshold Minimum value of \eqn{\overline{s}}{s-bar} that a set of
+#' clusters must have to be chosen as optimal. Within each interval of the
+#' filter function, the average silhouette values \eqn{\overline{s}}{s-bar} are computed
+#' for all possible partitions from $2$ to $n-1$, where $n$ is the number of
+#' samples within a specific interval. The $n$ that produces the highest value
+#' of \eqn{\overline{s}}{s-bar} and that exceeds a specific threshold is selected as the
+#' optimum number of clusters. If no partition produces an \eqn{\overline{s}}{s-bar}
+#' exceeding the chosen threshold, all samples are then assigned to a unique
+#' cluster. The default value is $0.25$. The threshold of $0.25$ for
+#' \eqn{\overline{s}}{s-bar} has been chosen based on standard practice, recognizing it
+#' as a moderate value that reflects adequate separation and cohesion within
+#' clusters.
 #' @param num_bins_when_clustering Number of bins to generate the histogram
 #' employed by the standard optimal number of cluster finder method.
 #' Parameter not necessary if the "optimal_clust_mode" option is "silhouette"
@@ -83,13 +95,13 @@ samples_in_levels <- function(interval_data,filter_values){
 #' names of the samples and the vector values are the node number
 #' to which the individual belongs.
 #' @import cluster
-clust_lev <- function(full_data_i, distance_type, clustering_type, linkage_type,
-                      optimal_clustering_mode, num_bins_when_clustering, level_name){
+clust_lev <- function(data_i, distance_type, clustering_type, linkage_type,
+                      optimal_clustering_mode, silhouette_threshold = 0.25, num_bins_when_clustering, level_name){
   #Distance type
-  if(distance_type == "cor"){
-    level_dist <- stats::as.dist(1-stats::cor(full_data_i))
+  if(distance_type == "correlation"){
+    level_dist <- stats::as.dist(1-stats::cor(data_i))
   }else{
-    level_dist <- stats::dist(base::t(full_data_i),method = distance_type)
+    level_dist <- stats::dist(base::t(data_i),method = distance_type)
   }
 
   #Clustering type
@@ -98,7 +110,7 @@ clust_lev <- function(full_data_i, distance_type, clustering_type, linkage_type,
   if(clustering_type == "PAM"){
     av_sil <- c()
     n_clust <- c()
-    for(i in 1:(ncol(full_data_i)-1)){
+    for(i in 1:(ncol(data_i)-1)){
       temp_clust <- cluster::pam(x =level_dist,diss = TRUE,k = i)
       if(i == 1){
         av_sil <- c(av_sil,0)
@@ -108,13 +120,13 @@ clust_lev <- function(full_data_i, distance_type, clustering_type, linkage_type,
         n_clust <- c(n_clust,i)
       }
     }
-    if(max(av_sil) >= 0.25){
+    if(max(av_sil) >= silhouette_threshold){
       op_clust <- n_clust[which.max(av_sil)]
       cluster_indices_level <- cluster::pam(x =level_dist,diss = TRUE,k = op_clust)$clustering
       return(cluster_indices_level)
     }else{
-      cluster_indices_level <- rep(1,ncol(full_data_i))
-      names(cluster_indices_level) <- colnames(full_data_i)
+      cluster_indices_level <- rep(1,ncol(data_i))
+      names(cluster_indices_level) <- colnames(data_i)
       return(cluster_indices_level)
     }
   } else if(clustering_type == "hierarchical"){
@@ -128,13 +140,13 @@ clust_lev <- function(full_data_i, distance_type, clustering_type, linkage_type,
       hist_gap <- (histogram$counts == 0)
       if(all(!hist_gap)){
         warning("There is no gap... therefore only one cluster...")
-        cluster_indices_level <- base::rep(1,ncol(full_data_i))
-        names(cluster_indices_level) <- base::colnames(full_data_i)
+        cluster_indices_level <- base::rep(1,ncol(data_i))
+        names(cluster_indices_level) <- base::colnames(data_i)
         return(cluster_indices_level)
       }else{
         threshold_value <- histogram$mids[min(which(hist_gap == TRUE))]
         cluster_indices_level <- base::as.vector(stats::cutree(level_hclust_out, h=threshold_value))
-        base::names(cluster_indices_level) <- base::colnames(full_data_i)
+        base::names(cluster_indices_level) <- base::colnames(data_i)
         return(cluster_indices_level)
       }
     }
@@ -148,7 +160,7 @@ clust_lev <- function(full_data_i, distance_type, clustering_type, linkage_type,
         test <- cluster::silhouette(stats::cutree(level_hclust_out,i),level_dist)
         av_sil <- c(av_sil,mean(test[,3]))
       }
-      if(max(av_sil) >= 0.25){
+      if(max(av_sil) >= silhouette_threshold){
         op_clust <- n_clust[which.max(av_sil)]
         cluster_indices_level <- stats::cutree(level_hclust_out,op_clust)
         return(cluster_indices_level)
@@ -167,14 +179,14 @@ clust_lev <- function(full_data_i, distance_type, clustering_type, linkage_type,
 #' filtering function, the samples with a value within that interval
 #' are clustered using the proposed clustering algorithm and the
 #' proposed method to determine the optimal number of clusters.
-#' @param full_data Input data matrix whose columns are the individuals
+#' @param data Input data matrix whose columns are the individuals
 #' and rows are the features.BR cambiar nombre.
 #' @param samp_in_lev A list of character vectors with the individuals
 #' included in each of the levels (i.e. each of the intervals of the values
 #' of the filter functions). It is the output of the \code{samples_in_levels}
 #' function.
 #' @param distance_type Type of distance to be used for clustering.
-#' Choose between correlation ("cor") and euclidean ("euclidean").
+#' Choose between correlation ("correlation") and euclidean ("euclidean").
 #' @param clustering_type Type of clustering method. Choose between
 #' "hierarchical" and "PAM" (“partition around medoids”) options.
 #' @param linkage_type Linkage criteria used in hierarchical clustering.
@@ -185,7 +197,19 @@ clust_lev <- function(full_data_i, distance_type, clustering_type, linkage_type,
 #' clusters. It is only necessary if the chosen type of algorithm is
 #' hierarchical. In this case, choose between "standard" (the method used
 #' in the original mapper article) or "silhouette". In the case of the
-#' PAM algorithm, the method will always be "silhouette". "silhouette"
+#' PAM algorithm, the method will always be "silhouette". "silhouette".
+#' @param silhouette_threshold Minimum value of \eqn{\overline{s}}{s-bar} that a set of
+#' clusters must have to be chosen as optimal. Within each interval of the
+#' filter function, the average silhouette values \eqn{\overline{s}}{s-bar} are computed
+#' for all possible partitions from $2$ to $n-1$, where $n$ is the number of
+#' samples within a specific interval. The $n$ that produces the highest value
+#' of \eqn{\overline{s}}{s-bar} and that exceeds a specific threshold is selected as the
+#' optimum number of clusters. If no partition produces an \eqn{\overline{s}}{s-bar}
+#' exceeding the chosen threshold, all samples are then assigned to a unique
+#' cluster. The default value is $0.25$. The threshold of $0.25$ for
+#' \eqn{\overline{s}}{s-bar} has been chosen based on standard practice, recognizing it
+#' as a moderate value that reflects adequate separation and cohesion within
+#' clusters.
 #' @param num_bins_when_clustering Number of bins to generate the
 #' histogram employed by the standard optimal number of cluster finder
 #' method. Parameter not necessary if the "optimal_clust_mode" option
@@ -194,14 +218,14 @@ clust_lev <- function(full_data_i, distance_type, clustering_type, linkage_type,
 #' about the nodes at each level and the individuals contained in them. The
 #' names of the vector values are the names of the samples and the vector
 #' values are the node number of that level to which the individual belongs.
-clust_all_levels <- function(full_data, samp_in_lev, distance_type, clustering_type,
-                             linkage_type, optimal_clustering_mode, num_bins_when_clustering){
+clust_all_levels <- function(data, samp_in_lev, distance_type, clustering_type,
+                             linkage_type, optimal_clustering_mode, silhouette_threshold, num_bins_when_clustering){
 
   list_out <- base::list()
   for(i in 1:base::length(samp_in_lev)){
     if(length(samp_in_lev[[i]]) > 2){
-      clust_level_temp <- clust_lev(full_data[,samp_in_lev[[i]]], distance_type, clustering_type,
-                                    linkage_type, optimal_clustering_mode, num_bins_when_clustering,
+      clust_level_temp <- clust_lev(data[,samp_in_lev[[i]]], distance_type, clustering_type,
+                                    linkage_type, optimal_clustering_mode, silhouette_threshold, num_bins_when_clustering,
                                     base::paste("Level",i,sep="_"))
     }else{
       if(base::length(samp_in_lev[[i]]) < 3 & base::length(samp_in_lev[[i]]) > 0){

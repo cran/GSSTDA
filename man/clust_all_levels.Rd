@@ -5,17 +5,18 @@
 \title{Get clusters for all data level}
 \usage{
 clust_all_levels(
-  full_data,
+  data,
   samp_in_lev,
   distance_type,
   clustering_type,
   linkage_type,
   optimal_clustering_mode,
+  silhouette_threshold,
   num_bins_when_clustering
 )
 }
 \arguments{
-\item{full_data}{Input data matrix whose columns are the individuals
+\item{data}{Input data matrix whose columns are the individuals
 and rows are the features.BR cambiar nombre.}
 
 \item{samp_in_lev}{A list of character vectors with the individuals
@@ -24,7 +25,7 @@ of the filter functions). It is the output of the \code{samples_in_levels}
 function.}
 
 \item{distance_type}{Type of distance to be used for clustering.
-Choose between correlation ("cor") and euclidean ("euclidean").}
+Choose between correlation ("correlation") and euclidean ("euclidean").}
 
 \item{clustering_type}{Type of clustering method. Choose between
 "hierarchical" and "PAM" (“partition around medoids”) options.}
@@ -38,7 +39,20 @@ complete-linkage clustering or "average" for average linkage clustering
 clusters. It is only necessary if the chosen type of algorithm is
 hierarchical. In this case, choose between "standard" (the method used
 in the original mapper article) or "silhouette". In the case of the
-PAM algorithm, the method will always be "silhouette". "silhouette"}
+PAM algorithm, the method will always be "silhouette". "silhouette".}
+
+\item{silhouette_threshold}{Minimum value of \eqn{\overline{s}}{s-bar} that a set of
+clusters must have to be chosen as optimal. Within each interval of the
+filter function, the average silhouette values \eqn{\overline{s}}{s-bar} are computed
+for all possible partitions from $2$ to $n-1$, where $n$ is the number of
+samples within a specific interval. The $n$ that produces the highest value
+of \eqn{\overline{s}}{s-bar} and that exceeds a specific threshold is selected as the
+optimum number of clusters. If no partition produces an \eqn{\overline{s}}{s-bar}
+exceeding the chosen threshold, all samples are then assigned to a unique
+cluster. The default value is $0.25$. The threshold of $0.25$ for
+\eqn{\overline{s}}{s-bar} has been chosen based on standard practice, recognizing it
+as a moderate value that reflects adequate separation and cohesion within
+clusters.}
 
 \item{num_bins_when_clustering}{Number of bins to generate the
 histogram employed by the standard optimal number of cluster finder

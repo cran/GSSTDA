@@ -21,22 +21,30 @@
 #' @param full_data Input matrix whose columns correspond to the patients and
 #' rows to the genes.
 #' @param survival_time Numerical vector of the same length as the number of
-#' columns of full_data. Patients must be in the same order as in full_data.
-#' For the patients with tumour sample should be indicated the time between
-#' disease diagnosis and death (if not dead until the end of follow-up)
-#' and healthy patients must have an NA value.
+#' columns of \code{full_data}. In addition, the patients must be in the same
+#' order as in \code{full_data}. For the patients whose sample is pathological
+#' should be indicated the time between the disease diagnosis and event
+#' (death, relapse or other). If the event has not occurred, it should be
+#' indicated the time until the end of follow-up. Patients whose sample is
+#' from healthy tissue must have an NA value
 #' @param survival_event Numerical vector of the same length as the number of
-#' columns of full_data. Patients must be in the same order as in full_data.
-#' For the patients with tumour sample should be indicated whether
-#' the patient has died (1) or not (0). Only these values are valid
-#' and healthy patients must have an NA value.
+#' columns of \code{full_data}. Patients must be in the same order as in
+#' \code{full_data}. For the the patients with pathological sample should
+#' be indicated whether the event has occurred (1) or not (0). Only these
+#' values are valid and healthy patients must have an NA value.
 #' @param case_tag Character vector of the same length as the number of
-#' columns of full_data. Patients must be in the same order as in full_data.
-#' It must be indicated for each patient whether he/she is healthy or not.
-#' One value should be used to indicate whether the patient is healthy and
-#' another value should be used to indicate whether the patient's sample is
-#' tumourous. The user will then be asked which one indicates whether
-#' the patient is healthy. Only two values are valid in the vector in total.
+#' columns of \code{full_data}. Patients must be in the same order as in
+#' \code{full_data}. It must be indicated for each patient whether its
+#' sample is from pathological or healthy tissue. One value should be used to
+#' indicate whether the patient's sample is healthy and another value should
+#' be used to indicate whether the patient's sample is pathological.
+#' The user will then be asked which one indicates whether the patient is
+#' healthy. Only two values are valid in the vector in total.
+#' @param control_tag Tag of the healthy sample.E.g. "T"
+#' @param gamma A parameter that indicates the magnitude of the noise assumed in
+#' the flat data matrix for the generation of the Healthy State Model. If it
+#' takes the value `NA` the magnitude of the noise is assumed to be unknown.
+#' By default gamma is unknown.
 #' @param gen_select_type Option. Options on how to select the genes to be
 #' used in the mapper. Select the "Abs" option, which means that the
 #' genes with the highest absolute value are chosen, or the
@@ -53,7 +61,7 @@
 #' of overlap between intervals. Expressed as a percentage. 40 default option.
 #' @param distance_type Parameter for the mapper algorithm.
 #' Type of distance to be used for clustering. Choose between correlation
-#' ("cor") and euclidean ("euclidean"). "cor" default option.
+#' ("correlation") and euclidean ("euclidean"). "correlation" default option.
 #' @param clustering_type Parameter for the mapper algorithm. Type of
 #' clustering method. Choose between "hierarchical" and "PAM"
 #' (“partition around medoids”) options. "hierarchical" default option.
@@ -67,10 +75,27 @@
 #' clustering, "complete" for complete-linkage clustering or "average" for
 #' average linkage clustering (or UPGMA). Only necessary for hierarchical
 #' clustering. "single" default option.
+#' @param optimal_clustering_mode Method for selection optimal number of
+#' clusters. It is only necessary if the chosen type of algorithm is
+#' hierarchical. In this case, choose between "standard" (the method used
+#' in the original mapper article) or "silhouette". In the case of the PAM
+#' algorithm, the method will always be "silhouette".
+#' @param silhouette_threshold Minimum value of \eqn{\overline{s}}{s-bar} that a set of
+#' clusters must have to be chosen as optimal. Within each interval of the
+#' filter function, the average silhouette values \eqn{\overline{s}}{s-bar} are computed
+#' for all possible partitions from $2$ to $n-1$, where $n$ is the number of
+#' samples within a specific interval. The $n$ that produces the highest value
+#' of \eqn{\overline{s}}{s-bar} and that exceeds a specific threshold is selected as the
+#' optimum number of clusters. If no partition produces an \eqn{\overline{s}}{s-bar}
+#' exceeding the chosen threshold, all samples are then assigned to a unique
+#' cluster. The default value is $0.25$. The threshold of $0.25$ for
+#' \eqn{\overline{s}}{s-bar} has been chosen based on standard practice, recognizing it
+#' as a moderate value that reflects adequate separation and cohesion within
+#' clusters.
 #' @param na.rm \code{logical}. If \code{TRUE}, \code{NA} rows are omitted.
 #' If \code{FALSE}, an error occurs in case of \code{NA} rows. TRUE default
 #' option.
-#' @return A \code{GSSTDA} object. It contains:
+#' @return A \code{gsstda} object. It contains:
 #' - the matrix with the normal space \code{normal_space},
 #' - the matrix of the disease components normal_space \code{matrix_disease_component},
 #' - a matrix with the results of the application of proportional hazard models
@@ -92,47 +117,47 @@
 #' @export
 #' @examples
 #' \donttest{
-#' GSSTDA_object <- GSSTDA(full_data,  survival_time, survival_event, case_tag,
+#' gsstda_object <- gsstda(full_data,  survival_time, survival_event, case_tag, gamma=NA,
 #'                  gen_select_type="Top_Bot", percent_gen_select=10,
 #'                  num_intervals = 4, percent_overlap = 50,
 #'                  distance_type = "euclidean", num_bins_when_clustering = 8,
 #'                  clustering_type = "hierarchical", linkage_type = "single")}
-GSSTDA <- function(full_data, survival_time, survival_event, case_tag, gen_select_type="Top_Bot",
-                   percent_gen_select=10, num_intervals=5, percent_overlap=40, distance_type="cor",
+gsstda <- function(full_data, survival_time, survival_event, case_tag, control_tag = NA, gamma=NA, gen_select_type="Top_Bot",
+                   percent_gen_select=10, num_intervals=5, percent_overlap=40, distance_type="correlation",
                    clustering_type="hierarchical", num_bins_when_clustering=10, linkage_type="single",
-                   na.rm=TRUE){
+                   optimal_clustering_mode = NA, silhouette_threshold = 0.25, na.rm=TRUE){
   ################################ Prepare data and check data ########################################
   #Check the arguments introduces in the function
   full_data <- check_full_data(full_data, na.rm)
-  #Select the control_tag. This do it inside of the DGSA function
+  #Select the control_tag. This do it inside of the dsga function
   #Check and obtain gene selection (we use in the gene_select_surv). It execute in Block II
   #num_gen_select <- check_gene_selection(nrow(full_data), gen_select_type, percent_gen_select)
 
   #Don't check filter_values because it is not created.
   filter_values <- c()
   check_return <- check_arg_mapper(full_data, filter_values, distance_type, clustering_type,
-                                              linkage_type, na.rm)
+                                              linkage_type, optimal_clustering_mode, silhouette_threshold, na.rm)
 
   full_data <- check_return[[1]]
   filter_values <- check_return[[2]]
   optimal_clustering_mode <- check_return[[3]]
 
 
-  ################### BLOCK I: Pre-process. DGSA (using "NT" control_tag) ##############################
-  DGSA_obj <- DGSA(full_data, survival_time, survival_event, case_tag, na.rm = "checked")
-  matrix_disease_component <- DGSA_obj[["matrix_disease_component"]]
-  control_tag <- DGSA_obj[["control_tag"]]
-  full_data <- DGSA_obj[["full_data"]]
-  survival_event <- DGSA_obj[["survival_event"]]
-  survival_time <- DGSA_obj[["survival_time"]]
-  case_tag <- DGSA_obj[["case_tag"]]
+  ################### BLOCK I: Pre-process. dsga (using "NT" control_tag) ##############################
+  dsga_obj <- dsga(full_data, survival_time, survival_event, case_tag, control_tag, gamma, na.rm = "checked")
+  matrix_disease_component <- dsga_obj[["matrix_disease_component"]]
+  control_tag <- dsga_obj[["control_tag"]]
+  full_data <- dsga_obj[["full_data"]]
+  survival_event <- dsga_obj[["survival_event"]]
+  survival_time <- dsga_obj[["survival_time"]]
+  case_tag <- dsga_obj[["case_tag"]]
 
   ################### BLOCK II: Gene selection (using "T" control_tag) ##################################
-  geneSelection_object <- geneSelection(DGSA_obj, gen_select_type, percent_gen_select)
-  cox_all_matrix <- geneSelection_object[["cox_all_matrix"]]
-  genes_selected <- geneSelection_object[["genes_selected"]]
-  genes_disease_component <- geneSelection_object[["genes_disease_component"]]
-  filter_values <- geneSelection_object[["filter_values"]]
+  gene_selection_object <- gene_selection(dsga_obj, gen_select_type, percent_gen_select)
+  cox_all_matrix <- gene_selection_object[["cox_all_matrix"]]
+  genes_selected <- gene_selection_object[["genes_selected"]]
+  genes_disease_component <- gene_selection_object[["genes_disease_component"]]
+  filter_values <- gene_selection_object[["filter_values"]]
 
   ################### BLOCK III: Create mapper object where the arguments are checked ###################
   message("\nBLOCK III: The mapper process is started")
@@ -146,14 +171,14 @@ GSSTDA <- function(full_data, survival_time, survival_event, case_tag, gen_selec
   filter_values <- check_filter[[2]]
 
   mapper_obj <- mapper(genes_disease_component, filter_values, num_intervals, percent_overlap, distance_type,
-                       clustering_type, num_bins_when_clustering, linkage_type, optimal_clustering_mode,
+                       clustering_type, num_bins_when_clustering, linkage_type, optimal_clustering_mode, silhouette_threshold,
                        na.rm = "checked")
 
   message("\nBLOCK III: The mapper process is finished")
 
 
   ############################################  Create the object #########################################
-  GSSTDA_object <- list("normal_space" = DGSA_obj[["normal_space"]],
+  gsstda_object <- list("normal_space" = dsga_obj[["normal_space"]],
                         "matrix_disease_component" = matrix_disease_component,
                         "cox_all_matrix" = cox_all_matrix,
                         "genes_selected" = genes_selected,
@@ -161,6 +186,6 @@ GSSTDA <- function(full_data, survival_time, survival_event, case_tag, gen_selec
                         "mapper_obj" = mapper_obj
                         )
 
-  class(GSSTDA_object) <- "GSSTDA_obj"
-  return(GSSTDA_object)
+  class(gsstda_object) <- "gsstda_obj"
+  return(gsstda_object)
 }

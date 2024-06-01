@@ -22,99 +22,6 @@ flatten_normal_tiss <- function(normal_tiss){
 }
 
 
-#' @title Computes lambda
-#' @description Computes the value of lambda as defined in: "The Optimal
-#' Hard Threshold for Singular Values is \eqn{\sqrt(4/ 3)}".
-#' @param bet Beta value. Aspect ratio of the input matrix.  \deqn{\frac{m}{n}},
-#' were m is the number of rows of the input matrix and n the number of columns.
-#' @return Numeric. Lambda value.
-#' @export
-#' @examples
-#' get_lambda(0.3)
-get_lambda <- function(bet){
-  w = (8*bet) / ((bet + 1) + sqrt(bet^2 + 14*bet + 1))
-  lambda_star <- sqrt(2*(bet + 1) + w)
-  return(lambda_star)
-}
-
-
-#' @title Marcenko-Pastur distribution to integrate.
-#' @description This function is an auxiliary function that includes
-#' the Marcenco-Pastur function that has to be integrated to find the
-#' upper bound of integration that produces and area of 1/2.
-#' @param t Parameter t.
-#' @param bet Beta value. Aspect ratio of the input matrix,
-#' \eqn{\frac{m}{n}}, were m is the number of rows of the input
-#' matrix and n the number of columns.
-#' @export
-#' @return It returns the function value for a specific t and a particular
-#' aspect ration m/n.
-#' @examples fun_to_int(1,0.3)
-fun_to_int <- function(t,bet){
-  b_p <- (1 + sqrt(bet))^2
-  b_m <- (1 - sqrt(bet))^2
-  numerator <- sqrt((b_p - t)*(t - b_m))
-  denominator <- 2*pi*t*bet
-  res <- numerator/denominator
-  return(res)
-}
-
-
-#' @title Get mu sub beta
-#' @description This function identifies the upper bound of integration of the
-#' Marcenko-Pastur distribution, as described in "The Optimal Hard
-#' Threshold for Singular Values is \eqn{\sqrt(4/ 3)}". It explores 100
-#' values in a given interval. Then it selects the values closest to 1/2
-#' on the left and on the right. As the upper bound of integration,
-#' if the distance between the left and right approximations is lower than
-#' a given threshold (1e-10), it converges and the upper bound that produces
-#' an area of 1/2 is defined as the mean of the left and right approximations.
-#' @param bet Beta value. Aspect ratio of the input matrix, \deqn{\frac{m}{n}},
-#' were m is the number of rows of the input matrix and n the number of columns.
-#' @return It returns the mu beta value. This is the upper limit of integration
-#' where the Marcenko-Pastur distribution is equal to 1/2.
-#' @export
-#' @examples
-#' get_mu_beta(0.3)
-get_mu_beta <- function(bet){
-  thresh_diff <- 1e-10
-  lbond <- (1 - sqrt(bet))^2
-  hbond <- (1 + sqrt(bet))^2
-  seqvals <- seq(lbond,hbond,length.out = 100)
-  while(T){
-    values_int <- c()
-    for (i in 1:length(seqvals)){
-      res <- stats::integrate(fun_to_int,lbond,seqvals[i],bet)$value
-      values_int <- c(values_int,res)
-    }
-    if(abs(max(values_int[values_int < 0.5]) - 0.5) < thresh_diff & abs(min(values_int[values_int > 0.5]) - 0.5) < thresh_diff){
-      final_seqval <- (max(seqvals[values_int < 0.5]) + min(seqvals[values_int > 0.5]))/2
-      break
-    }else{
-      seqvals <- seq(seqvals[max(which(values_int < 0.5))],seqvals[min(which(values_int > 0.5))],length.out = 100)
-    }
-  }
-  return(final_seqval)
-}
-
-
-#' @title Compute the omega value
-#' @description It computes the omega value as described in "The Optimal Hard
-#' Threshold for Singular Values is \eqn{\sqrt(4/ 3)}".
-#' @param bet Beta value. Aspect ratio of the input matrix, \deqn{\frac{m}{n}},
-#' were m is the number of rows of the input matrix and n the number of columns.
-#' @return Numeric. Omega value.
-#' @export
-#' @examples
-#' get_omega(0.3)
-get_omega <- function(bet){
-  lamb <- get_lambda(bet)
-  mu_beta <- get_mu_beta(bet)
-  omega <- lamb/sqrt(mu_beta)
-  return(omega)
-}
-
-
 #' @title Rectangular Matrix Denoiser.
 #' @description It takes a rectangular matrix composed by the addition of
 #' a signal matrix and a Gaussian noise matrix and returns a matrix of the same
@@ -125,18 +32,19 @@ get_omega <- function(bet){
 #' the function \code{flatten_normal_tiss}.
 #' @param matrix_flatten_normal_tiss A rectangular noisy matrix to denoise. It is return by
 #' \code{flatten_normal_tiss} function.
+#' @param gamma A parameter that indicates the magnitude of the noise assumed in
+#' the flat data matrix for the generation of the Healthy State Model. If it
+#' takes the value `NA` the magnitude of the noise is assumed to be unknown.
+#' By default gamma is unknown.
 #' @return A the normal space which has the same dimension denoised version of the matrix
 #' returned by \code{flatten_normal_tiss}.
-#'
 #' @export
-#' @examples
-#' \donttest{
-#' denoise_rectangular_matrix(matrix(c(1,2,3,4,5,2,3,1,2,3),ncol = 2))
-#' }
-denoise_rectangular_matrix <- function(matrix_flatten_normal_tiss){
-  ### Model reduction ##
-  # Find omega value
-  omega_found <- get_omega(ncol(matrix_flatten_normal_tiss)/nrow(matrix_flatten_normal_tiss))
+denoise_rectangular_matrix <- function(matrix_flatten_normal_tiss, gamma){
+  #Transpose matrix_flatten_normal_tiss
+  matrix_flatten_normal_tiss <- t(matrix_flatten_normal_tiss)
+  R <- nrow(matrix_flatten_normal_tiss)
+  l <- ncol(matrix_flatten_normal_tiss)
+  beta <- R/l
 
   # Calculate Singular Value Decomposition of matrix_flatten_normal_tiss
   svd <- base::svd(matrix_flatten_normal_tiss)
@@ -148,18 +56,22 @@ denoise_rectangular_matrix <- function(matrix_flatten_normal_tiss){
   u <- svd$u
   v <- svd$v
 
-  # Threshold of the singular matrix
-  threshold_singular <- stats::median(d)*omega_found
+  ## Gamma is observed
+  if(!(is.na(gamma))){
+      tau <- optimal_SVHT_coef_gamma_known(beta) * sqrt(l) * gamma
+  }else{
+      tau <- optimal_SVHT_coef_gamma_unknown(beta) * stats::median(d)
+  }
 
-  # Count values up to the threshold
-  up_to_threshold <- length(d[d > threshold_singular])
-  d[(up_to_threshold + 1):length(d)] <- 0
+  # Apply hard thresholding
+  d[d < tau] <- 0
 
   # Build rectangular renoised matrix of the normal tiss space
   normal_space <- u %*% diag(d) %*% t(v)
   rownames(normal_space) <- rownames(matrix_flatten_normal_tiss)
   colnames(normal_space) <- colnames(matrix_flatten_normal_tiss)
 
+  normal_space <- t(normal_space)
   return(normal_space)
 }
 
@@ -179,10 +91,10 @@ denoise_rectangular_matrix <- function(matrix_flatten_normal_tiss){
 #' @examples
 #' \donttest{
 #' full_data <- matrix(stats::rnorm(120),ncol=20)
-#' normal_tissue <- full_data[,11:20]
+#' normal_tissue <- t(full_data)
 #' normal_tissue_f <- flatten_normal_tiss(normal_tissue)
-#' normal_tissue_f_d <- denoise_rectangular_matrix(normal_tissue_f)
-#' disease_component <- generate_disease_component(full_data,normal_tissue_f_d)}
+#' normal_tissue_f_d <- denoise_rectangular_matrix(normal_tissue_f, gamma=NA)
+#' disease_component <- generate_disease_component(t(full_data),normal_tissue_f_d)}
 generate_disease_component <- function(full_data, normal_space){
   # calculate the distance of all points to the normal space by calculating the regression residuals
   disease_component <- full_data
@@ -193,9 +105,9 @@ generate_disease_component <- function(full_data, normal_space){
 }
 
 
-#' @title plot DGSA
+#' @title plot dsga
 #' @description
-#' It draws the heatmap of the DGSA result by selecting the 100 genes with
+#' It draws the heatmap of the dsga result by selecting the 100 genes with
 #' the highest variability between samples.
 #' @param selected_matrix_disease_component Disease component matrix of
 #' the selected genes that contains the disease component of all patients.
@@ -210,8 +122,8 @@ generate_disease_component <- function(full_data, normal_space){
 #' @import ComplexHeatmap
 #' @import circlize
 #' @export
-#' @return The heatmap of the DGSA result.
-plot_DGSA <- function(selected_matrix_disease_component, case_tag){
+#' @return The heatmap of the dsga result.
+plot_dsga <- function(selected_matrix_disease_component, case_tag){
   col_fun = circlize::colorRamp2(c(-4, 0,4),
                                  c("red", "black", "green"))
   row_text_size = 10
@@ -224,14 +136,14 @@ plot_DGSA <- function(selected_matrix_disease_component, case_tag){
                                                cluster_columns = T,col = col_fun,
                                                cluster_rows = F,
                                                heatmap_legend_param = list(
-                                                 title = "Expression",
+                                                 title = "Value of the\ndisease component",
                                                  at = c(-4, 0, 4)),
                                                row_names_gp = grid::gpar(fontsize = 5.25),
                                                column_names_gp = grid::gpar(fontsize = 0),
                                                top_annotation = ha))
 }
 
-#' @title results DGSA
+#' @title results dsga
 #' @description
 #' It calculates the 100 genes with the highest variability in the matrix
 #' disease component between samples and use them to draw the heat map.
@@ -248,14 +160,14 @@ plot_DGSA <- function(selected_matrix_disease_component, case_tag){
 #' @export
 #' @return A heatmap of the 100 genes with the highest variability in the matrix
 #' disease component.
-results_DGSA <- function(matrix_disease_component, case_tag){
+results_dsga <- function(matrix_disease_component, case_tag){
   genes_sd <- apply(matrix_disease_component,1,stats::sd)
   selected_genes_sd <- names(genes_sd[order(genes_sd,decreasing = T)])[1:100]
   selected_matrix_disease_component_sd <- matrix_disease_component[selected_genes_sd,]
 
   # DT::datatable(selected_matrix_disease_component_sd)
 
-  plot_DGSA(selected_matrix_disease_component_sd, case_tag)
+  plot_dsga(selected_matrix_disease_component_sd, case_tag)
 
   return(selected_genes_sd)
 }

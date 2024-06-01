@@ -5,21 +5,22 @@
 \title{Get clusters for a particular data level}
 \usage{
 clust_lev(
-  full_data_i,
+  data_i,
   distance_type,
   clustering_type,
   linkage_type,
   optimal_clustering_mode,
+  silhouette_threshold = 0.25,
   num_bins_when_clustering,
   level_name
 )
 }
 \arguments{
-\item{full_data_i}{Matrix with the columns of the input matrix
+\item{data_i}{Matrix with the columns of the input matrix
 corresponding to the individuals belonging to the level.}
 
 \item{distance_type}{Type of distance to be used for clustering.
-Choose between correlation ("cor") and euclidean ("euclidean").}
+Choose between correlation ("correlation") and euclidean ("euclidean").}
 
 \item{clustering_type}{Type of clustering method.
 Choose between "hierarchical" and "PAM" (“partition around medoids”)
@@ -36,6 +37,19 @@ clusters. It is only necessary if the chosen type of algorithm is
 hierarchical. In this case, choose between "standard" (the method used
 in the original mapper article) or "silhouette". In the case of the PAM
 algorithm, the method will always be "silhouette".}
+
+\item{silhouette_threshold}{Minimum value of \eqn{\overline{s}}{s-bar} that a set of
+clusters must have to be chosen as optimal. Within each interval of the
+filter function, the average silhouette values \eqn{\overline{s}}{s-bar} are computed
+for all possible partitions from $2$ to $n-1$, where $n$ is the number of
+samples within a specific interval. The $n$ that produces the highest value
+of \eqn{\overline{s}}{s-bar} and that exceeds a specific threshold is selected as the
+optimum number of clusters. If no partition produces an \eqn{\overline{s}}{s-bar}
+exceeding the chosen threshold, all samples are then assigned to a unique
+cluster. The default value is $0.25$. The threshold of $0.25$ for
+\eqn{\overline{s}}{s-bar} has been chosen based on standard practice, recognizing it
+as a moderate value that reflects adequate separation and cohesion within
+clusters.}
 
 \item{num_bins_when_clustering}{Number of bins to generate the histogram
 employed by the standard optimal number of cluster finder method.
